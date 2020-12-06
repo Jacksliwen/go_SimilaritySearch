@@ -1,0 +1,1 @@
+/usr/bin/c++  -fPIC  -DEXPORT -O3 -std=c++11 -g -Wl,-rpath=./lib:../lib   -shared -Wl,-soname,libfaissengine.so -o ../lib/libfaissengine.so CMakeFiles/faissengine.dir/src/faissengine.cpp.o 

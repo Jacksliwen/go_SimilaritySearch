@@ -1,0 +1,16 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/faissengine.h
+
+/home/users/yang.yang/github/go_similarity_search/cpp/src/faissengine.cpp
+faissengine.h
+/home/users/yang.yang/github/go_similarity_search/cpp/src/faissengine.h
+stdio.h
+-
+
