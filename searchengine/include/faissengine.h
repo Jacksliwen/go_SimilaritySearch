@@ -1,5 +1,5 @@
-#ifndef ___FACEENGINE___
-#define ___FACEENGINE___
-void hello(const char* str);
+#ifndef ___FAISSENGINE___
+#define ___FAISSENGINE___
+void hello(void);
 #endif
 

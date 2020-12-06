@@ -1,12 +1,12 @@
 package searchengine
 
 /*
-#cgo  CPPFLAGS:  -I./include
-#cgo  LDFLAGS:  -L./lib  -lfaissengine -Wl,-rpath=./lib
+#cgo  CFLAGS:  -I${SRCDIR}/include
+#cgo  LDFLAGS:  -L${SRCDIR}/lib -lfaissengine
 #include "faissengine.h"
 */
 import "C"
 
 func SayHello() {
-	C.hello(C.CString("call C hello func"))
+	C.hello()
 }

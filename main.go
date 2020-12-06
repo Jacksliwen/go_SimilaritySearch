@@ -1,7 +1,7 @@
 package main
 
 import (
-	"go_SimilaritySearch/searchengine"
+	"SimilaritySearch/searchengine"
 )
 
 func main() {
