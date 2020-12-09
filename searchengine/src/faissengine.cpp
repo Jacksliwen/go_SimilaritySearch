@@ -1,14 +1,39 @@
+#include <iostream>
+#include <mutex>
+#include <utility>
 #include "faissengine.h"
 #include <sstream>
-bool FaissEngine::Init() {
+#include <malloc.h>
+#include "faiss/IndexFlat.h"
+#include "faiss/gpu/GpuAutoTune.h"
+#include "faiss/gpu/GpuCloner.h"
+#include "faiss/gpu/GpuClonerOptions.h"
+#include "faiss/gpu/GpuIndexFlat.h"
+#include "faiss/gpu/StandardGpuResources.h"
+#include "faiss/gpu/GpuCloner.h"
+#include "faiss/gpu/GpuClonerOptions.h"
+#include "faiss/gpu/utils/DeviceUtils.h"
+
+int feature_size_;
+int feature_nums_;
+int gpu_nums_;
+std::mutex mutex_;
+std::vector<int> devs_;
+faiss::Index *gpu_index_;
+faiss::IndexFlatL2 *cpu_index_;
+faiss::gpu::GpuMultipleClonerOptions co_;
+std::vector<faiss::gpu::GpuResources *> gpu_resource_;
+
+bool Init(int feature_size) {
   try {
+    feature_size_ = feature_size;
     int is_use_float16 = 1;                    // 默认使用float16
     int reserved_mem_size = 10 * 1024 * 1024;  // 默认大小10M
     gpu_nums_ = faiss::gpu::getNumDevices();
     std::cout << "FaissEngine init, is_use_float16 =" << is_use_float16
               << ", reserved_mem_size = " << reserved_mem_size
               << ", all gpu nums = " << gpu_nums_
-              << ", feature_size = " << feature_size_ << std::endl;
+              << ", feature_size = " << feature_size << std::endl;
     for (int i = 0; i < gpu_nums_; i++) {
       auto res = new faiss::gpu::StandardGpuResources;
       res->setTempMemory(reserved_mem_size);
@@ -16,7 +41,7 @@ bool FaissEngine::Init() {
       devs_.push_back(i);
     }
 
-    cpu_index_ = new faiss::IndexFlatL2(feature_size_);
+    cpu_index_ = new faiss::IndexFlatL2(feature_size);
     co_.shard = true;
     if (is_use_float16 == 1) {
       co_.useFloat16 = true;
@@ -31,7 +56,7 @@ bool FaissEngine::Init() {
   return true;
 }
 
-void FaissEngine::Close() {
+void Close() {
   if (gpu_index_) {
     delete gpu_index_;
     gpu_index_ = nullptr;
@@ -50,7 +75,7 @@ void FaissEngine::Close() {
   gpu_resource_.clear();
 }
 
-bool FaissEngine::Add(const float *feats, int nums) {
+bool Add(const float *feats, int nums) {
   std::lock_guard<std::mutex> lk(mutex_);
   std::cout << "gpu_index_ add index,num = " << nums << std::endl;
   if (nums <= 0) {
@@ -75,9 +100,9 @@ bool FaissEngine::Add(const float *feats, int nums) {
 }
 
 
-bool FaissEngine::Search(
+bool Search(
     const float *feat, int num, int top_N,
-    std::vector<std::vector<std::pair<int64_t, float>>> *result) {
+    stuResult_ **results) {
   int top_k = top_N > feature_nums_ ? feature_nums_ : top_N;
   int64_t *I = new int64_t[top_k * num];
   float *D = new float[top_k * num];
@@ -91,15 +116,14 @@ bool FaissEngine::Search(
     delete[] D;
     return false;
   }
-  for (int i = 0; i < top_k * num;) {
-    std::vector<std::pair<int64_t, float>> each_result;
+  for(int i = 0; i < num; i++){
+    stuResult_ *result = (stuResult_*)malloc(sizeof(stuResult_)*top_k);
     for (int j = 0; j < top_k; j++) {
-      each_result.push_back(std::make_pair(I[i], D[i]));
-      i++;
-    }
-    result->push_back(each_result);
+      result[j].id = I[top_k*i+j];
+      result[j].Dis = D[top_k*i+j];
+     }
+    results[i] = result;
   }
-
   delete[] I;
   delete[] D;
   return true;

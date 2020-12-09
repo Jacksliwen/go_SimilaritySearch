@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	searchengine.SayHello()
+	searchengine.Init()
 }

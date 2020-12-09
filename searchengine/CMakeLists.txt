@@ -17,7 +17,7 @@ link_directories(
         /usr/local/lib
 
 )
-
+set (CMAKE_VERBOSE_MAKEFILE on)
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib) 
 add_library(faissengine SHARED ${PROJECT_SOURCE_DIR}/src/faissengine.cpp)
 
