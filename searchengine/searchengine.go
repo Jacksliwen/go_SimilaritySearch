@@ -8,5 +8,5 @@ package searchengine
 import "C"
 
 func Init() {
-	C.Init(C.int(256))
+	C.InitFaissEngine()
 }
