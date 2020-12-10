@@ -6,13 +6,24 @@ package searchengine
 #include "faissengine.h"
 */
 import "C"
-import (
-	"time"
-)
+import "unsafe"
 
-func Init() {
-	C.InitFaissEngine(C.CString("youlike"), 256)
-	time.Sleep(time.Duration(2) * time.Second)
-	C.DeleteFaissEngine(C.CString("youlike"))
-	time.Sleep(time.Duration(5) * time.Second)
+//InitEngine InitEngine
+func InitEngine(Setname string) {
+	C.InitFaissEngine(C.CString(Setname), 256)
+}
+
+//LoadData LoadData
+func LoadData(Setname string, allFeatures *float32, featureNum int) {
+	C.LoadData(C.CString(Setname), unsafe.Pointer(allFeatures), C.int(featureNum))
+}
+
+//Search Search
+func Search() {
+	//C.Search()
+}
+
+//DeleteFaissEngine DeleteFaissEngine
+func DeleteFaissEngine() {
+
 }

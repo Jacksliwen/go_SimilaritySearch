@@ -1,6 +1,7 @@
 #include "faissengine.h"
 
 #include <malloc.h>
+#include <stdio.h>
 
 #include <iostream>
 #include <map>
@@ -23,6 +24,7 @@ class FaissEngine {
 
  public:
   bool Init() {
+    std::lock_guard<std::mutex> lk(mutex_);
     try {
       int is_use_float16 = 1;                    // 默认使用float16
       int reserved_mem_size = 10 * 1024 * 1024;  // 默认大小10M
@@ -54,6 +56,7 @@ class FaissEngine {
   }
 
   void Close() {
+    std::lock_guard<std::mutex> lk(mutex_);
     if (gpu_index_) {
       delete gpu_index_;
       gpu_index_ = nullptr;
@@ -96,102 +99,23 @@ class FaissEngine {
     return true;
   }
 
-  inline bool Search(
-      const float *feat, int num, int top_N,
-      std::vector<std::vector<std::pair<int64_t, float>>> *result) {
-    int top_k = top_N > feature_nums_ ? feature_nums_ : top_N;
-    int64_t *I = new int64_t[top_k * num];
-    float *D = new float[top_k * num];
+  int Search(const float *feat, const int feat_num, const int top_N, int64_t *I,
+             float *D) {
+    size_t top_k = std::min(top_N, feature_nums_);
+    I = new int64_t[top_k * feat_num];
+    D = new float[top_k * feat_num];
     // gpu_resource_非线程安全
     std::lock_guard<std::mutex> lk(mutex_);
     try {
-      gpu_index_->search(num, feat, top_k, D, I);
+      gpu_index_->search(feat_num, feat, top_k, D, I);
     } catch (faiss::FaissException &e) {
       std::cout << "faiss search exception, e = " << e.what() << std::endl;
       delete[] I;
       delete[] D;
-      return false;
+      return -1;
     }
-    for (int i = 0; i < top_k * num;) {
-      std::vector<std::pair<int64_t, float>> each_result;
-      for (int j = 0; j < top_k; j++) {
-        each_result.push_back(std::make_pair(I[i], D[i]));
-        i++;
-      }
-      result->push_back(each_result);
-    }
-
-    delete[] I;
-    delete[] D;
-    return true;
+    return 0;
   }
-
-  // int FaissEngine::FindClosetRecord(
-  //     const std::unordered_map<std::string, IdObject> &map,
-  //     const feat_t &all_cls_center, const std::vector<std::string> &id_index,
-  //     const std::unordered_map<std::string, size_t> &id_reverted,
-  //     const vfeat_t &vfeat, const size_t feat_size, const float
-  //     vote_threshold, size_t top_n, std::vector<std::vector<IdObject>> *res)
-  //     {
-  //   res->clear();
-  //   if (map.empty() || top_n < 1) {
-  //     return 0;
-  //   }
-  //   size_t close_num = std::min(top_n, map.size());
-  //   std::vector<std::vector<std::pair<int64_t, float>>> computer_result;
-  //   // 1.检索
-  //   std::vector<float> vec_points(feature_size_ * vfeat.size());
-  //   float *pointer_to_points = &(vec_points[0]);  // 100W: 1G
-  //   for (size_t i = 0; i < vfeat.size(); ++i) {
-  //     for (size_t j = 0; j < feature_size_; ++j) {
-  //       pointer_to_points[i * feature_size_ + j] = vfeat[i][j];
-  //     }
-  //   }
-  //   std::cout << "vfeat size = " << vfeat.size()
-  //             << " ,close_num = " << close_num << std::endl;
-
-  //   if (!Search(pointer_to_points, vfeat.size(), close_num,
-  //   &computer_result)) {
-  //     std::cout << "faiss_wapper search error!" << std::endl;
-  //     return 0;
-  //   }
-  //   try {
-  //     // 2.组装信息
-  //     for (int j = 0; j < computer_result.size(); j++) {
-  //       std::vector<IdObject> vecTemp;
-  //       for (size_t i = 0; i < computer_result[j].size(); ++i) {
-  //         IdObject temp;
-  //         auto id_tt = id_index[computer_result[j][i].first];
-  //         std::cout << "id = " << id_tt
-  //                   << "computer_result = " << computer_result[j][i].second
-  //                   << " ,similar = " << (2 - computer_result[j][i].second) /
-  //                   2
-  //                   << std::endl;
-  //         auto iter = map.find(id_tt);
-  //         if (iter == map.end()) {
-  //           std::cout << "id_index cannot find in map. id_index = "
-  //                     << id_index[computer_result[j][i].first] << std::endl;
-  //           continue;
-  //         }
-  //         auto idtemp = iter->second;
-  //         temp.id = idtemp.id;
-  //         temp.group_id = idtemp.group_id;
-  //         temp.features = idtemp.features;
-  //         temp.similar = computer_result[j][i].second;
-  //         temp.IPC_id = idtemp.IPC_id;
-  //         temp.snap_time = idtemp.snap_time;
-  //         temp.face_id = idtemp.face_id;
-
-  //         vecTemp.emplace_back(temp);
-  //       }
-  //       res->push_back(vecTemp);
-  //     }
-  //   } catch (std::exception &e) {
-  //     std::cout << "FindClosetRecord Execption,e = " << e.what() <<
-  //     std::endl; return -1;
-  //   }
-  //   return 0;
-  // }
 
  private:
   int feature_size_;
@@ -205,20 +129,53 @@ class FaissEngine {
   std::vector<faiss::gpu::GpuResources *> gpu_resource_;
 };
 
-std::map<char *, std::shared_ptr<FaissEngine>> mapSet_Faissengine;
+std::map<std::string, std::shared_ptr<FaissEngine>> mapSet_Faissengine;
 
 int InitFaissEngine(char *set_name, int feature_size) {
   if (set_name != nullptr) {
-    auto engine = std::make_shared<FaissEngine>(feature_size);
-    if (engine->Init() != true) {
-      return -1;
+    auto iter = mapSet_Faissengine.find(set_name);
+    if (mapSet_Faissengine.end() == iter) {
+      auto engine = std::make_shared<FaissEngine>(feature_size);
+      if (engine->Init() != true) {
+        return -1;
+      }
+      mapSet_Faissengine.insert(std::make_pair(set_name, engine));
+      std::cout << "init engine " << set_name << " successed\n";
+    } else {
+      std::cout << "we have " << set_name << "already\n";
     }
-    mapSet_Faissengine.insert(std::make_pair(set_name, engine));
     return 0;
+  } else {
+    std::cout << "set_name is empty\n";
+    return -1;
   }
 }
 
-// void Search() { engine->Search(); }
+int LoadData(char *set_name, void *allFeatures, int featureNum) {
+  float *ptrAllFeatures = (float *)allFeatures;
+  auto iter = mapSet_Faissengine.find(set_name);
+  if (mapSet_Faissengine.end() != iter) {
+    iter->second->Add(ptrAllFeatures, featureNum);
+    std::cout << "AddData set_name= " << set_name << " successed\n";
+  } else {
+    std::cout << "we have not " << set_name << "  engine, may init first\n";
+  }
+  return 0;
+}
+
+int Search(char *set_name, const float *vfeat, int vfeat_size,
+           const size_t top_n, int64_t *I, float *D) {
+  auto iter = mapSet_Faissengine.find(set_name);
+  if (mapSet_Faissengine.end() != iter) {
+    if (0 == iter->second->Search(vfeat, vfeat_size, top_n, I, D)) {
+      std::cout << "Search set_name= " << set_name << " successed\n";
+    }
+  } else {
+    std::cout << "we have not " << set_name << "  engine, may init first\n";
+  }
+  return 0;
+}
+
 void DeleteFaissEngine(char *set_name) {
   auto iter = mapSet_Faissengine.find(set_name);
   if (iter != mapSet_Faissengine.end()) {

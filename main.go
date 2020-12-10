@@ -1,17 +1,18 @@
 package main
 
 import (
-	"SimilaritySearch/searchengine"
+	httpProcess "SimilaritySearch/http"
 	"fmt"
 	"net/http"
 )
 
-func DefaultHandler(w http.ResponseWriter, r *http.Request) {
-	searchengine.Init()
-	w.Write([]byte("Reload OK!"))
-}
 func main() {
-	http.HandleFunc("/Reload", DefaultHandler)
+
+	http.HandleFunc("/Reload", httpProcess.Reload)
+	http.HandleFunc("/Unload", httpProcess.Unload)
+	http.HandleFunc("/Addid", httpProcess.Addid)
+	http.HandleFunc("/Search", httpProcess.Search)
+
 	srv := &http.Server{
 		Addr: ":60018",
 	}
