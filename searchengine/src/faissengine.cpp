@@ -1,32 +1,36 @@
-#include <iostream>
-#include <mutex>
-#include <utility>
 #include "faissengine.h"
-#include <sstream>
+
 #include <malloc.h>
+
+#include <iostream>
+#include <map>
+#include <mutex>
+#include <sstream>
+#include <utility>
+#include <vector>
+
 #include "faiss/IndexFlat.h"
 #include "faiss/gpu/GpuAutoTune.h"
 #include "faiss/gpu/GpuCloner.h"
 #include "faiss/gpu/GpuClonerOptions.h"
 #include "faiss/gpu/GpuIndexFlat.h"
 #include "faiss/gpu/StandardGpuResources.h"
-#include "faiss/gpu/GpuCloner.h"
-#include "faiss/gpu/GpuClonerOptions.h"
 #include "faiss/gpu/utils/DeviceUtils.h"
 
 class FaissEngine {
-public:
+ public:
   FaissEngine(int feature_size) { feature_size_ = feature_size; }
-public:
+
+ public:
   bool Init() {
     try {
       int is_use_float16 = 1;                    // 默认使用float16
       int reserved_mem_size = 10 * 1024 * 1024;  // 默认大小10M
       gpu_nums_ = faiss::gpu::getNumDevices();
       std::cout << "FaissEngine init, is_use_float16 =" << is_use_float16
-        << ", reserved_mem_size = " << reserved_mem_size
-        << ", all gpu nums = " << gpu_nums_
-        << ", feature_size_ = " << feature_size_ << std::endl;
+                << ", reserved_mem_size = " << reserved_mem_size
+                << ", all gpu nums = " << gpu_nums_
+                << ", feature_size_ = " << feature_size_ << std::endl;
       for (int i = 0; i < gpu_nums_; i++) {
         auto res = new faiss::gpu::StandardGpuResources;
         res->setTempMemory(reserved_mem_size);
@@ -40,10 +44,9 @@ public:
         co_.useFloat16 = true;
       }
       gpu_index_ = faiss::gpu::index_cpu_to_gpu_multiple(gpu_resource_, devs_,
-        cpu_index_, &co_);
+                                                         cpu_index_, &co_);
       std::cout << "FaissEngine init successed!\n";
-    }
-    catch (faiss::FaissException& e) {
+    } catch (faiss::FaissException &e) {
       std::cout << "FaissEngine Init Execption,e = " << e.what() << std::endl;
       return false;
     }
@@ -61,15 +64,15 @@ public:
     }
 
     for (size_t i = 0; i < gpu_resource_.size(); ++i) {
-      if (gpu_resource_ [i]) {
-        delete gpu_resource_ [i];
-        gpu_resource_ [i] = nullptr;
+      if (gpu_resource_[i]) {
+        delete gpu_resource_[i];
+        gpu_resource_[i] = nullptr;
       }
     }
     gpu_resource_.clear();
   }
 
-  bool Add(const float* feats, int nums) {
+  bool Add(const float *feats, int nums) {
     std::lock_guard<std::mutex> lk(mutex_);
     std::cout << "gpu_index_ add index,num = " << nums << std::endl;
     if (nums <= 0) {
@@ -84,53 +87,52 @@ public:
     }
     try {
       gpu_index_ = faiss::gpu::index_cpu_to_gpu_multiple(gpu_resource_, devs_,
-        cpu_index_, &co_);
+                                                         cpu_index_, &co_);
       gpu_index_->add(nums, feats);
-    }
-    catch (faiss::FaissException& e) {
+    } catch (faiss::FaissException &e) {
       std::cout << "FaissEngine Add Execption,e = " << e.what() << std::endl;
       return false;
     }
     return true;
   }
 
+  inline bool Search(
+      const float *feat, int num, int top_N,
+      std::vector<std::vector<std::pair<int64_t, float>>> *result) {
+    int top_k = top_N > feature_nums_ ? feature_nums_ : top_N;
+    int64_t *I = new int64_t[top_k * num];
+    float *D = new float[top_k * num];
+    // gpu_resource_非线程安全
+    std::lock_guard<std::mutex> lk(mutex_);
+    try {
+      gpu_index_->search(num, feat, top_k, D, I);
+    } catch (faiss::FaissException &e) {
+      std::cout << "faiss search exception, e = " << e.what() << std::endl;
+      delete[] I;
+      delete[] D;
+      return false;
+    }
+    for (int i = 0; i < top_k * num;) {
+      std::vector<std::pair<int64_t, float>> each_result;
+      for (int j = 0; j < top_k; j++) {
+        each_result.push_back(std::make_pair(I[i], D[i]));
+        i++;
+      }
+      result->push_back(each_result);
+    }
 
-  // bool Search(
-  //   const float* feat, int num, int top_N,
-  //   stuResult_** results) {
-  //   int top_k = top_N > feature_nums_ ? feature_nums_ : top_N;
-  //   int64_t* I = new int64_t [top_k * num];
-  //   float* D = new float [top_k * num];
-  //   // gpu_resource_非线程安全
-  //   std::lock_guard<std::mutex> lk(mutex_);
-  //   try {
-  //     gpu_index_->search(num, feat, top_k, D, I);
-  //   }
-  //   catch (faiss::FaissException& e) {
-  //     std::cout << "faiss search exception, e = " << e.what() << std::endl;
-  //     delete[] I;
-  //     delete[] D;
-  //     return false;
-  //   }
-  //   for (int i = 0; i < num; i++) {
-  //     stuResult_* result = (stuResult_*)malloc(sizeof(stuResult_) * top_k);
-  //     for (int j = 0; j < top_k; j++) {
-  //       result [j].id = I [top_k * i + j];
-  //       result [j].Dis = D [top_k * i + j];
-  //     }
-  //     results [i] = result;
-  //   }
-  //   delete[] I;
-  //   delete[] D;
-  //   return true;
-  // }
+    delete[] I;
+    delete[] D;
+    return true;
+  }
 
-  // size_t FaissEngine::FindClosetRecord(
+  // int FaissEngine::FindClosetRecord(
   //     const std::unordered_map<std::string, IdObject> &map,
   //     const feat_t &all_cls_center, const std::vector<std::string> &id_index,
   //     const std::unordered_map<std::string, size_t> &id_reverted,
-  //     const vfeat_t &vfeat, const size_t feat_size, const float vote_threshold,
-  //     size_t top_n, std::vector<std::vector<IdObject>> *res) {
+  //     const vfeat_t &vfeat, const size_t feat_size, const float
+  //     vote_threshold, size_t top_n, std::vector<std::vector<IdObject>> *res)
+  //     {
   //   res->clear();
   //   if (map.empty() || top_n < 1) {
   //     return 0;
@@ -145,9 +147,11 @@ public:
   //       pointer_to_points[i * feature_size_ + j] = vfeat[i][j];
   //     }
   //   }
-  //   std::cout << "vfeat size = " << vfeat.size() << " ,close_num = " << close_num << std::endl;
+  //   std::cout << "vfeat size = " << vfeat.size()
+  //             << " ,close_num = " << close_num << std::endl;
 
-  //   if (!Search(pointer_to_points, vfeat.size(), close_num, &computer_result)) {
+  //   if (!Search(pointer_to_points, vfeat.size(), close_num,
+  //   &computer_result)) {
   //     std::cout << "faiss_wapper search error!" << std::endl;
   //     return 0;
   //   }
@@ -158,12 +162,15 @@ public:
   //       for (size_t i = 0; i < computer_result[j].size(); ++i) {
   //         IdObject temp;
   //         auto id_tt = id_index[computer_result[j][i].first];
-  //         std::cout << "id = " << id_tt << "computer_result = " << computer_result[j][i].second
-  //                   << " ,similar = " << (2 - computer_result[j][i].second) / 2 << std::endl;
+  //         std::cout << "id = " << id_tt
+  //                   << "computer_result = " << computer_result[j][i].second
+  //                   << " ,similar = " << (2 - computer_result[j][i].second) /
+  //                   2
+  //                   << std::endl;
   //         auto iter = map.find(id_tt);
   //         if (iter == map.end()) {
   //           std::cout << "id_index cannot find in map. id_index = "
-  //                    << id_index[computer_result[j][i].first] << std::endl;
+  //                     << id_index[computer_result[j][i].first] << std::endl;
   //           continue;
   //         }
   //         auto idtemp = iter->second;
@@ -180,25 +187,43 @@ public:
   //       res->push_back(vecTemp);
   //     }
   //   } catch (std::exception &e) {
-  //     std::cout << "FindClosetRecord Execption,e = " << e.what() <<std::endl;
-  //     return false;
+  //     std::cout << "FindClosetRecord Execption,e = " << e.what() <<
+  //     std::endl; return -1;
   //   }
-  //   return 1;
+  //   return 0;
   // }
-private:
+
+ private:
   int feature_size_;
   int feature_nums_;
   int gpu_nums_;
   std::mutex mutex_;
   std::vector<int> devs_;
-  faiss::Index* gpu_index_;
-  faiss::IndexFlatL2* cpu_index_;
+  faiss::Index *gpu_index_;
+  faiss::IndexFlatL2 *cpu_index_;
   faiss::gpu::GpuMultipleClonerOptions co_;
-  std::vector<faiss::gpu::GpuResources*> gpu_resource_;
-
+  std::vector<faiss::gpu::GpuResources *> gpu_resource_;
 };
 
-void InitFaissEngine() {
-  FaissEngine* engine = new FaissEngine(256);
-  engine->Init();
+std::map<char *, std::shared_ptr<FaissEngine>> mapSet_Faissengine;
+
+int InitFaissEngine(char *set_name, int feature_size) {
+  if (set_name != nullptr) {
+    auto engine = std::make_shared<FaissEngine>(feature_size);
+    if (engine->Init() != true) {
+      return -1;
+    }
+    mapSet_Faissengine.insert(std::make_pair(set_name, engine));
+    return 0;
+  }
+}
+
+// void Search() { engine->Search(); }
+void DeleteFaissEngine(char *set_name) {
+  auto iter = mapSet_Faissengine.find(set_name);
+  if (iter != mapSet_Faissengine.end()) {
+    iter->second->Close();
+    mapSet_Faissengine.erase(iter);
+    std::cout << "Delete faissengine name = " << set_name << std::endl;
+  }
 }

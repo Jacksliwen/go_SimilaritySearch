@@ -18,7 +18,7 @@ link_directories(
 
 )
 set (CMAKE_VERBOSE_MAKEFILE on)
-SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib) 
+SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../lib) 
 add_library(faissengine SHARED ${PROJECT_SOURCE_DIR}/src/faissengine.cpp)
 
 target_link_libraries(
