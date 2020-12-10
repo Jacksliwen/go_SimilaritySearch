@@ -7,7 +7,6 @@ package searchengine
 */
 import "C"
 import (
-	"fmt"
 	"time"
 )
 
@@ -16,6 +15,4 @@ func Init() {
 	time.Sleep(time.Duration(2) * time.Second)
 	C.DeleteFaissEngine(C.CString("youlike"))
 	time.Sleep(time.Duration(5) * time.Second)
-	var name string
-	fmt.Scanln(&name)
 }
