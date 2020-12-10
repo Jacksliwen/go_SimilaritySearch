@@ -11,7 +11,7 @@ include_directories(
 
 
 link_directories(
-        ${PROJECT_SOURCE_DIR}/lib/faiss
+        ${PROJECT_SOURCE_DIR}/lib
         /usr/local/cuda/lib64
         /usr/lib64
         /usr/local/lib

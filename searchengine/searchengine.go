@@ -15,7 +15,7 @@ func InitEngine(Setname string) {
 
 //LoadData LoadData
 func LoadData(Setname string, allFeatures *float32, featureNum int) {
-	C.LoadData(C.CString(Setname), (*C.float)(unsafe.Pointer)(allFeatures), C.int(featureNum))
+	C.LoadData(C.CString(Setname), (*C.float)(unsafe.Pointer(allFeatures)), C.int(featureNum))
 }
 
 //Search Search

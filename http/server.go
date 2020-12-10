@@ -7,13 +7,14 @@ import (
 
 //Reload Reload
 func Reload(w http.ResponseWriter, req *http.Request) {
-	searchengine.Reload("myok")
+	searchengine.InitEngine("myok")
 	w.Write([]byte("Reload OK!"))
 }
 
 //Addid Addid
 func Addid(w http.ResponseWriter, r *http.Request) {
-	searchengine.Addid("myok", "myok")
+	var ff *float32
+	searchengine.LoadData("myok", ff, 1)
 	w.Write([]byte("Addid OK!"))
 }
 
@@ -23,7 +24,8 @@ func Search(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Search OK!"))
 }
 
+//Unload Unload
 func Unload(w http.ResponseWriter, req *http.Request) {
-	searchengine.Reload("myok")
-	w.Write([]byte("Reload OK!"))
+	searchengine.InitEngine("myok")
+	w.Write([]byte("Unload OK!"))
 }
