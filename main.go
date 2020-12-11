@@ -12,6 +12,7 @@ func main() {
 	http.HandleFunc("/Unload", httpProcess.Unload)
 	http.HandleFunc("/Addid", httpProcess.Addid)
 	http.HandleFunc("/Search", httpProcess.Search)
+	http.HandleFunc("/Status", httpProcess.GetStatus)
 
 	srv := &http.Server{
 		Addr: ":60018",
