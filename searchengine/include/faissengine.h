@@ -4,12 +4,24 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-  //初始化
-  int InitFaissEngine(char* set_name, int feature_size);
-  int LoadData(char* set_name, float* allFeatures, int featureNum);
-  int Search(char* set_name, float* vfeat, int vfeat_size, const size_t top_n,
-    long* I, float* D);
-  void DeleteFaissEngine(char* set_name);
+typedef struct {
+  char* set_name_;   //集合名称
+  int feature_size;  //特征向量大小
+  int feature_num_;  //加载的特征数量
+} EngineLoadInfo;
+
+//初始化
+int InitFaissEngine(const char* set_name, const int feature_size);
+
+int LoadData(const char* set_name, float* allFeatures, const int featureNum);
+
+int Search(const char* set_name, const float* vfeat, const int vfeat_size,
+           const int top_n, long* I, float* D);
+
+void DeleteFaissEngine(const char* set_name);
+
+int GetAllEngineStatus(EngineLoadInfo* info);
+
 #ifdef __cplusplus
 }
 #endif

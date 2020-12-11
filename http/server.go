@@ -20,12 +20,14 @@ func Addid(w http.ResponseWriter, r *http.Request) {
 
 //Search Search
 func Search(w http.ResponseWriter, r *http.Request) {
-	searchengine.Search()
+	var ff, D *float32
+	var I *int64
+	searchengine.Search("myok", ff, 1, 1, I, D)
 	w.Write([]byte("Search OK!"))
 }
 
 //Unload Unload
 func Unload(w http.ResponseWriter, req *http.Request) {
-	searchengine.InitEngine("myok")
+	searchengine.DeleteFaissEngine("myok")
 	w.Write([]byte("Unload OK!"))
 }

@@ -19,10 +19,10 @@
 #include "faiss/gpu/utils/DeviceUtils.h"
 
 class FaissEngine {
-public:
+ public:
   FaissEngine(int feature_size) { feature_size_ = feature_size; }
 
-public:
+ public:
   bool Init() {
     std::lock_guard<std::mutex> lk(mutex_);
     try {
@@ -30,9 +30,9 @@ public:
       int reserved_mem_size = 10 * 1024 * 1024;  // 默认大小10M
       gpu_nums_ = faiss::gpu::getNumDevices();
       std::cout << "FaissEngine init, is_use_float16 =" << is_use_float16
-        << ", reserved_mem_size = " << reserved_mem_size
-        << ", all gpu nums = " << gpu_nums_
-        << ", feature_size_ = " << feature_size_ << std::endl;
+                << ", reserved_mem_size = " << reserved_mem_size
+                << ", all gpu nums = " << gpu_nums_
+                << ", feature_size_ = " << feature_size_ << std::endl;
       for (int i = 0; i < gpu_nums_; i++) {
         auto res = new faiss::gpu::StandardGpuResources;
         res->setTempMemory(reserved_mem_size);
@@ -46,10 +46,9 @@ public:
         co_.useFloat16 = true;
       }
       gpu_index_ = faiss::gpu::index_cpu_to_gpu_multiple(gpu_resource_, devs_,
-        cpu_index_, &co_);
+                                                         cpu_index_, &co_);
       std::cout << "FaissEngine init successed!\n";
-    }
-    catch (faiss::FaissException& e) {
+    } catch (faiss::FaissException& e) {
       std::cout << "FaissEngine Init Execption,e = " << e.what() << std::endl;
       return false;
     }
@@ -68,9 +67,9 @@ public:
     }
 
     for (size_t i = 0; i < gpu_resource_.size(); ++i) {
-      if (gpu_resource_ [i]) {
-        delete gpu_resource_ [i];
-        gpu_resource_ [i] = nullptr;
+      if (gpu_resource_[i]) {
+        delete gpu_resource_[i];
+        gpu_resource_[i] = nullptr;
       }
     }
     gpu_resource_.clear();
@@ -91,10 +90,9 @@ public:
     }
     try {
       gpu_index_ = faiss::gpu::index_cpu_to_gpu_multiple(gpu_resource_, devs_,
-        cpu_index_, &co_);
+                                                         cpu_index_, &co_);
       gpu_index_->add(nums, feats);
-    }
-    catch (faiss::FaissException& e) {
+    } catch (faiss::FaissException& e) {
       std::cout << "FaissEngine Add Execption,e = " << e.what() << std::endl;
       return false;
     }
@@ -102,16 +100,15 @@ public:
   }
 
   int Search(const float* feat, const int feat_num, const int top_N, int64_t* I,
-    float* D) {
+             float* D) {
     size_t top_k = std::min(top_N, feature_nums_);
-    I = new int64_t [top_k * feat_num];
-    D = new float [top_k * feat_num];
+    I = new int64_t[top_k * feat_num];
+    D = new float[top_k * feat_num];
     // gpu_resource_非线程安全
     std::lock_guard<std::mutex> lk(mutex_);
     try {
       gpu_index_->search(feat_num, feat, top_k, D, I);
-    }
-    catch (faiss::FaissException& e) {
+    } catch (faiss::FaissException& e) {
       std::cout << "faiss search exception, e = " << e.what() << std::endl;
       delete[] I;
       delete[] D;
@@ -120,7 +117,7 @@ public:
     return 0;
   }
 
-private:
+ private:
   int feature_size_;
   int feature_nums_;
   int gpu_nums_;
@@ -134,7 +131,7 @@ private:
 
 std::map<std::string, std::shared_ptr<FaissEngine>> mapSet_Faissengine;
 
-int InitFaissEngine(char* set_name, int feature_size) {
+int InitFaissEngine(const char* set_name, const int feature_size) {
   if (set_name != nullptr) {
     auto iter = mapSet_Faissengine.find(set_name);
     if (mapSet_Faissengine.end() == iter) {
@@ -144,45 +141,41 @@ int InitFaissEngine(char* set_name, int feature_size) {
       }
       mapSet_Faissengine.insert(std::make_pair(set_name, engine));
       std::cout << "init engine " << set_name << " successed\n";
-    }
-    else {
+    } else {
       std::cout << "we have " << set_name << "already\n";
     }
     return 0;
-  }
-  else {
+  } else {
     std::cout << "set_name is empty\n";
     return -1;
   }
 }
 
-int LoadData(char* set_name, float* allFeatures, int featureNum) {
+int LoadData(const char* set_name, float* allFeatures, const int featureNum) {
   auto iter = mapSet_Faissengine.find(set_name);
   if (mapSet_Faissengine.end() != iter) {
     iter->second->Add(allFeatures, featureNum);
     std::cout << "AddData set_name= " << set_name << " successed\n";
-  }
-  else {
+  } else {
     std::cout << "we have not " << set_name << "  engine, may init first\n";
   }
   return 0;
 }
 
-int Search(char* set_name, const float* vfeat, int vfeat_size,
-  const size_t top_n, int64_t* I, float* D) {
+int Search(const char* set_name, const float* vfeat, const int vfeat_size,
+           const int top_n, long* I, float* D) {
   auto iter = mapSet_Faissengine.find(set_name);
   if (mapSet_Faissengine.end() != iter) {
     if (0 == iter->second->Search(vfeat, vfeat_size, top_n, I, D)) {
       std::cout << "Search set_name= " << set_name << " successed\n";
     }
-  }
-  else {
+  } else {
     std::cout << "we have not " << set_name << "  engine, may init first\n";
   }
   return 0;
 }
 
-void DeleteFaissEngine(char* set_name) {
+void DeleteFaissEngine(const char* set_name) {
   auto iter = mapSet_Faissengine.find(set_name);
   if (iter != mapSet_Faissengine.end()) {
     iter->second->Close();
