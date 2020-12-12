@@ -42,7 +42,7 @@ public:
         << ", reserved_mem_size = " << reserved_mem_size
         << ", all gpu nums = " << gpu_nums_
         << ", feature_size_ = " << feature_size_ << std::endl;
-      for (int i = 0; i < gpu_nums_; i++) {
+      for (int i = 0; i < 1; i++) {
         auto res = new faiss::gpu::StandardGpuResources;
         res->setTempMemory(reserved_mem_size);
         gpu_resource_.push_back(res);
@@ -111,16 +111,20 @@ public:
     return 0;
   }
 
-  int Search(const float* feat, const int feat_num, const int top_N, int64_t* I,
-    float* D) {
+  int Search(const float* feat, const int feat_num, const int top_N, SearchRetInfo* rets) {
     PrintFeat(feat);
     size_t top_k = std::min(top_N, feature_nums_);
-    I = new int64_t [top_k * feat_num];
-    D = new float [top_k * feat_num];
+    int64_t* I = new int64_t [top_k * feat_num];
+    float* D = new float [top_k * feat_num];
     // gpu_resource_非线程安全
     std::lock_guard<std::mutex> lk(mutex_);
     try {
       gpu_index_->search(feat_num, feat, top_k, D, I);
+      for (int i = 0; i < top_k * feat_num; i++) {
+        rets[i].id = I[i];
+        rets[i].dis = D[i];
+        std::cout << "id= " << I[i] << " ,Dis = " << D[i] << std::endl;
+      }
     }
     catch (faiss::FaissException& e) {
       std::cout << "faiss search exception, e = " << e.what() << std::endl;
@@ -128,7 +132,9 @@ public:
       delete[] D;
       return -1;
     }
-    return top_k * feat_num;
+    delete[] I;
+    delete[] D;
+      return top_k * feat_num;
   }
   int feature_nums_;
 private:
@@ -180,10 +186,10 @@ int LoadData(const char* set_name, float* allFeatures, const int featureNum) {
 }
 
 int Search(const char* set_name, const float* vfeat, const int vfeat_size,
-  const int top_n, long* I, float* D) {
+  const int top_n, SearchRetInfo* rets) {
   auto iter = mapSet_Faissengine.find(set_name);
   if (mapSet_Faissengine.end() != iter) {
-    return iter->second->Search(vfeat, vfeat_size, top_n, I, D);
+    return iter->second->Search(vfeat, vfeat_size, top_n, rets);
   }
   else {
     std::cout << "we have not " << set_name << "  engine, may init first\n";

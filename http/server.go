@@ -17,18 +17,6 @@ type Request struct {
 	TopN     int32     `json:"top_n"`
 }
 
-//RepInfo RepInfo
-type RepInfo struct {
-	Index    int64   `json:"index"`
-	Distance float32 `json:"distance"`
-}
-
-//Respones Respones
-type Respones struct {
-	SetName string    `json:"set_name"`
-	Infos   []RepInfo `json:"resusts"`
-}
-
 //Reload Reload
 func Reload(rep ComHttp.ResponseWriter, req *ComHttp.Request) {
 	body, _ := ioutil.ReadAll(req.Body)
@@ -51,8 +39,8 @@ func Addid(rep ComHttp.ResponseWriter, req *ComHttp.Request) {
 	body, _ := ioutil.ReadAll(req.Body)
 	var Body Request
 	if err := jsoniter.Unmarshal(body, &Body); err == nil {
-		if Body.SetName != "" && Body.Feat != nil && Body.FeatInfo != "" {
-			searchengine.LoadData(Body.SetName, (*float32)(&Body.Feat[0]), 1)
+		if Body.SetName != "" && len(Body.Feat) != 0 && Body.FeatInfo != "" {
+			searchengine.Addid(Body.SetName, Body.Feat, Body.FeatInfo)
 			rep.Write([]byte("Addid OK!"))
 		} else {
 			rep.Write([]byte("SetName | Feat | FeatInfo = nil, Addid Failed!"))
@@ -67,26 +55,12 @@ func Search(rep ComHttp.ResponseWriter, req *ComHttp.Request) {
 	body, _ := ioutil.ReadAll(req.Body)
 	var Body Request
 	if err := jsoniter.Unmarshal(body, &Body); err == nil {
-		if Body.SetName != "" && Body.Feat != nil && Body.TopN > 0 {
-			var D []float32
-			var I []int64
-			num := searchengine.Search(Body.SetName, (*float32)(&Body.Feat[0]), 1, Body.TopN, (*int64)(&I[0]), (*float32)(&D[0]))
-			if num < 0 {
-				rep.Write([]byte("Search Failed num = " + fmt.Sprintf("%d", num)))
-			}
-			infoss := []RepInfo{}
-			for i := 0; i < num; i++ {
-				info := &RepInfo{
-					Index:    I[i],
-					Distance: D[i],
-				}
-				infoss = append(infoss, *info)
+		if Body.SetName != "" && len(Body.Feat) != 0 && Body.TopN > 0 {
+			ret, _ := searchengine.Search(Body.SetName, Body.Feat, 1, Body.TopN)
+			if len(ret) < 0 {
+				rep.Write([]byte("Search Failed num = nil"))
 			}
 
-			ret := &Respones{
-				SetName: Body.SetName,
-				Infos:   infoss,
-			}
 			rett, _ := jsoniter.Marshal(ret)
 			rep.Write(rett)
 		} else {

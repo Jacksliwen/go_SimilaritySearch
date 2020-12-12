@@ -11,19 +11,53 @@ import (
 	"unsafe"
 )
 
+var Sets = make(map[string]*common.FeatureSet)
+
+// AllFeature     [][]float32
+// IDInfo         []string
+
 //InitEngine InitEngine
 func InitEngine(Setname string) int {
+	set := new(common.FeatureSet)
+	set.SetName = Setname
+	// set.AllFeature = make([][]float32, 0)
+	// set.IDInfo = make([]string, 0)
+	Sets[Setname] = set
 	return int(C.InitFaissEngine(C.CString(Setname), 256))
 }
 
-//LoadData LoadData
-func LoadData(Setname string, allFeatures *float32, featureNum int) int {
-	return int(C.LoadData(C.CString(Setname), (*C.float)(unsafe.Pointer(allFeatures)), C.int(featureNum)))
+//Addid Addid
+func Addid(Setname string, Features []float32, featureInfo string) int {
+	set := Sets[Setname]
+	set.AllFeature = append(set.AllFeature, Features)
+	set.IDInfo = append(set.IDInfo, featureInfo)
+
+	return int(C.LoadData(C.CString(Setname), (*C.float)(unsafe.Pointer((*float32)(&(set.AllFeature[0][0])))), C.int(len(set.IDInfo))))
 }
 
 //Search Search
-func Search(Setname string, vfeat *float32, vfeatSize int32, topN int32, I *int64, D *float32) int {
-	return int(C.Search(C.CString(Setname), (*C.float)(unsafe.Pointer(vfeat)), C.int(vfeatSize), C.int(topN), (*C.long)(unsafe.Pointer(I)), (*C.float)(unsafe.Pointer(D))))
+func Search(Setname string, vfeat []float32, vfeatSize int32, topN int32) (searchRets []common.SearchRet, ret int) {
+	Cinfos := make([]C.SearchRetInfo, topN*vfeatSize)
+	num := int(C.Search(C.CString(Setname), (*C.float)(unsafe.Pointer((*float32)(&(vfeat[0])))), C.int(vfeatSize), C.int(topN), &(Cinfos[0])))
+	if 0 >= num {
+		return nil, -1
+	}
+
+	for i, info := range Cinfos {
+		if i == num {
+			break
+		}
+		if (int64)(len(Sets[Setname].IDInfo)) < (int64)(info.id) {
+			continue
+		}
+		searchret := &common.SearchRet{
+			SetName:  Setname,
+			ID:       Sets[Setname].IDInfo[(int64)(info.id)],
+			Distance: (float32)(info.dis),
+		}
+		searchRets = append(searchRets, *searchret)
+	}
+	return searchRets, 0
 }
 
 //DeleteFaissEngine DeleteFaissEngine
